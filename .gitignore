@@ -1,0 +1,5 @@
+# 运行时产生的数据与日志
+devices.json
+*.log
+*.log.err
+.vscode/

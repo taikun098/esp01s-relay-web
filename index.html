@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>继电器控制中心</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css">
+<script>tailwind.config={theme:{extend:{colors:{primary:'#165DFF',success:'#36D399',danger:'#F87272',dark:'#1E293B'}}}}</script>
+<style>
+  body{font-family:-apple-system,"Microsoft YaHei",sans-serif}
+  .card{box-shadow:0 2px 10px rgba(0,0,0,.06)}
+  .btn{transition:all .15s}.btn:hover{transform:translateY(-1px);box-shadow:0 4px 10px rgba(22,93,255,.2)}
+  .btn:disabled{opacity:.5}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+  .dot.on{background:#36D399;box-shadow:0 0 6px #36D399}.dot.off{background:#cbd5e1}
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+<div class="max-w-3xl mx-auto p-4">
+  <header class="text-center py-6">
+    <h1 class="text-2xl font-bold text-dark"><i class="fa fa-plug text-primary mr-2"></i>继电器控制中心</h1>
+    <p class="text-gray-500 text-sm mt-1">NAS 直连 · 自动注册</p>
+  </header>
+
+  <div class="bg-white rounded-xl p-4 card mb-5">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-semibold text-dark">设备列表</h2>
+      <button onclick="loadDevices()" class="text-sm text-primary"><i class="fa fa-refresh"></i></button>
+    </div>
+    <div id="device-list" class="space-y-2"></div>
+  </div>
+
+  <div id="panel" class="hidden">
+    <div class="bg-white rounded-xl p-4 card mb-5 flex items-center justify-between">
+      <div>
+        <span id="status-dot" class="dot off"></span>
+        <span id="status-text" class="text-sm text-gray-600"></span>
+        <span class="text-xs text-gray-400 ml-2" id="dev-id"></span>
+      </div>
+      <button onclick="renameDevice()" class="text-sm text-primary"><i class="fa fa-pencil"></i> 改名</button>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+      <div class="bg-white rounded-xl p-6 card text-center">
+        <h2 class="font-semibold text-dark mb-1">电脑开机</h2>
+        <p class="text-xs text-gray-400 mb-4">短按电源键 · 2 秒</p>
+        <button id="btn-on" onclick="sendCmd('kj00')" class="btn w-full bg-primary text-white py-3 rounded-lg font-medium">
+          <i class="fa fa-power-off mr-1"></i>启动电脑</button>
+        <p id="st-on" class="text-xs text-gray-400 mt-3">就绪</p>
+      </div>
+      <div class="bg-white rounded-xl p-6 card text-center">
+        <h2 class="font-semibold text-dark mb-1">强制关机</h2>
+        <p class="text-xs text-gray-400 mb-4">长按电源键 · 10 秒</p>
+        <button id="btn-off" onclick="sendCmd('gj00')" class="btn w-full bg-danger text-white py-3 rounded-lg font-medium">
+          <i class="fa fa-stop mr-1"></i>强制关闭电脑</button>
+        <p id="st-off" class="text-xs text-gray-400 mt-3">就绪</p>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl p-5 card mb-5">
+      <h2 class="font-semibold text-dark mb-3"><i class="fa fa-cloud-download mr-1 text-primary"></i>OTA 远程升级</h2>
+      <div class="flex gap-2">
+        <input id="ota-url" type="text" value="http://192.168.0.x:8090/firmware.bin" placeholder="固件地址 http://.../firmware.bin" class="flex-1 border rounded-lg px-3 py-2 text-sm">
+        <button onclick="sendOta()" class="btn bg-dark text-white px-4 rounded-lg text-sm">推送</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-xl p-5 card">
+    <h2 class="font-semibold text-dark mb-3"><i class="fa fa-list mr-1"></i>操作日志</h2>
+    <div id="log" class="h-40 overflow-y-auto bg-gray-50 rounded-lg p-3 text-xs space-y-1 text-gray-600"></div>
+  </div>
+</div>
+
+<script>
+let devices=[], current=null;
+
+async function loadDevices(){
+  const r=await fetch('/api/status'); const d=await r.json();
+  devices=d.devices;
+  const list=document.getElementById('device-list'); list.innerHTML='';
+  devices.forEach(dv=>{
+    const el=document.createElement('div');
+    el.className='flex items-center justify-between p-3 rounded-lg cursor-pointer border-2 '+(current===dv.id?'border-primary bg-blue-50':'bg-gray-50 border-transparent');
+    el.innerHTML=`<div><span class="dot ${dv.online?'on':'off'}"></span>
+      <b>${dv.name}</b> <span class="text-xs text-gray-400 ml-1">${dv.online?'在线':(dv.last_seen_ago==null?'未上线':dv.last_seen_ago+'秒前')}</span></div>
+      <div class="text-xs text-gray-400">${dv.id}</div>`;
+    el.onclick=()=>{current=dv.id;loadDevices();};
+    list.appendChild(el);
+  });
+  if(!current&&devices.length)current=devices[0].id;
+  renderStatus();
+}
+
+function renderStatus(){
+  const panel=document.getElementById('panel');
+  const dv=devices.find(x=>x.id===current);
+  if(!dv){panel.classList.add('hidden');return;}
+  panel.classList.remove('hidden');
+  document.getElementById('dev-id').textContent=dv.id;
+  const dot=document.getElementById('status-dot');
+  dot.className='dot '+(dv.online?'on':'off');
+  document.getElementById('status-text').innerHTML=`<b>${dv.name}</b> ${dv.online?'在线':'离线'}`;
+}
+
+async function sendCmd(cmd){
+  if(!current)return;
+  const btn=document.getElementById(cmd==='kj00'?'btn-on':'btn-off');
+  const st=document.getElementById(cmd==='kj00'?'st-on':'st-off');
+  btn.disabled=true; st.textContent='已下发…'; st.className='text-xs mt-3 text-primary';
+  try{
+    const r=await fetch(`/api/cmd/${current}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd})});
+    if(r.ok){
+      log(`→ ${cmd==='kj00'?'开机':'强制关机'} → ${current}`);
+      st.textContent=cmd==='kj00'?'继电器吸合 2 秒':'继电器吸合 10 秒';
+      setTimeout(()=>{st.textContent='就绪';st.className='text-xs text-gray-400 mt-3';},cmd==='kj00'?2000:10000);
+    }
+  }catch(e){st.textContent='网络错误';st.className='text-xs mt-3 text-red-500';}
+  btn.disabled=false; setTimeout(loadDevices,1500);
+}
+
+async function sendOta(){
+  const DEF='http://192.168.0.x:8090/firmware.bin';
+  let url=document.getElementById('ota-url').value.trim()||DEF;
+  if(!confirm(`推送到 ${current}?\n${url}`))return;
+  const r=await fetch(`/api/cmd/${current}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:'ota',url})});
+  if(r.ok){log(`→ OTA: ${url}`);alert('已下发');}
+}
+
+async function renameDevice(){
+  const dv=devices.find(x=>x.id===current); if(!dv)return;
+  const name=prompt('输入新名称：',dv.name);
+  if(!name||!name.trim())return;
+  await fetch(`/api/rename/${current}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.trim()})});
+  loadDevices();
+}
+
+function log(m){
+  const el=document.getElementById('log');
+  const div=document.createElement('div');
+  div.textContent=`[${new Date().toLocaleTimeString()}] ${m}`;
+  el.insertBefore(div,el.firstChild);
+}
+
+loadDevices();
+setInterval(loadDevices,3000);
+</script>
+</body>
+</html>
