@@ -1,5 +1,11 @@
 # ESP-01S 网页控制继电器（NAS 中转版）
 
+> **仓库说明**：GitHub 为主库，对外开源展示 → https://github.com/taikun098/
+esp01s-relay-web
+> Gitee 为国内镜像站，访问加速用 → https://gitee.com/wjk098/
+esp01s-relay-web
+> 两边内容保持一致；Issue / PR 请走 GitHub，Gitee 侧不单独接受合并。
+
 用一块 ESP-01S 控制服务器/主机电源：ESP 自己连 WiFi，定时轮询 NAS 上的一个小 Flask 服务；网页端在设备列表里点「开机 / 强制关机 / OTA 升级」，指令下发到对应板子，板子拉继电器点动。
 
 > 公开版说明：源码里的 WiFi 名称与密码已替换成 `******`，使用前请填成自己的。
